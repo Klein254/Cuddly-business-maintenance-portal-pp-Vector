@@ -1,0 +1,8 @@
+{
+  "name": "Vector Maintenance Portal",
+  "description": "Enterprise portal for Vector Maintenance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["employee", "admin", "super-admin"] },
+        "pin": { "type": "string" },
+        "balanceDue": { "type": "number" },
+        "phone": { "type": "string" },
+        "position": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "themePreference": { "type": "string", "enum": ["dark", "high-contrast"] }
+      },
+      "required": ["id", "name", "email", "role", "pin", "balanceDue", "phone", "position", "avatarColor"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Work shift",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "type": { "type": "string", "enum": ["normal", "on-call", "night", "off"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "date", "startTime", "endTime", "type"]
+    },
+    "ClockLog": {
+      "title": "ClockLog",
+      "description": "A single clock-in/clock-out record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "clockInTime": { "type": "string" },
+        "clockOutTime": { "type": "string" },
+        "clockInGps_lat": { "type": "number" },
+        "clockInGps_lng": { "type": "number" },
+        "clockInGps_address": { "type": "string" },
+        "clockOutGps_lat": { "type": "number" },
+        "clockOutGps_lng": { "type": "number" },
+        "clockOutGps_address": { "type": "string" },
+        "totalHours": { "type": "number" },
+        "overtimeHours": { "type": "number" },
+        "calculatedPay": { "type": "number" },
+        "verified": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "clockInTime", "clockInGps_lat", "clockInGps_lng", "clockInGps_address", "verified"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Job ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["maintenance", "general-supply", "urgent"] },
+        "assignedUserId": { "type": "string" },
+        "assignedUserName": { "type": "string" },
+        "locationName": { "type": "string" },
+        "gps_lat": { "type": "number" },
+        "gps_lng": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "on-site", "in-progress", "completed"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "startedAt": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "signature": { "type": "string" },
+        "payoutAmount": { "type": "number" }
+      },
+      "required": ["id", "title", "description", "category", "assignedUserId", "assignedUserName", "locationName", "gps_lat", "gps_lng", "status", "priority", "payoutAmount"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "recipientUserId": { "type": "string" },
+        "recipientUserName": { "type": "string" },
+        "isSent": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["alert", "system", "job", "payroll"] }
+      },
+      "required": ["id", "title", "message", "timestamp", "recipientUserId", "recipientUserName", "isSent", "type"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "senderId", "senderName", "senderRole", "recipientId", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of all users"
+    },
+    "/shifts/{shiftId}": {
+      "schema": { "$ref": "#/entities/Shift" },
+      "description": "Collection of all user shifts"
+    },
+    "/clockLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ClockLog" },
+      "description": "Collection of time entries"
+    },
+    "/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "Collection of jobs/tickets"
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Collection of notifications"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Collection of all chat messages"
+    }
+  }
+}
