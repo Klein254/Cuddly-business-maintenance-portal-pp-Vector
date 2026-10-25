@@ -10,6 +10,8 @@ import NotificationsWidget from './NotificationsWidget';
 import ReportsWidget from './ReportsWidget';
 import TeamWidget from './TeamWidget';
 import ChatWidget from './ChatWidget';
+import { showAlert } from '../platform';
+import { SecureAccountsReport } from '../auth';
 
 interface AdminPanelProps {
   users: User[];
@@ -27,8 +29,13 @@ interface AdminPanelProps {
   onVerifyClockLog: (id: string) => void;
   onAdminClockOutUser?: (id: string) => void;
   onUpdateUserStatus: (id: string, updates: Partial<User>) => void;
-  onAddUser: (user: User) => void;
+  onAddUser: (user: User, password: string) => Promise<boolean>;
+  onSaveUser: (user: User, changes: Partial<User>, newPassword?: string) => Promise<boolean>;
   onDeleteUser: (userId: string) => void;
+  secured: boolean;
+  rulesPublished: boolean | null;
+  onSecureAccounts: () => Promise<SecureAccountsReport | null>;
+  onSignOut: () => void;
   onUpdateJobStatus: (id: string, status: Job['status']) => void;
   onSendMessage: (msg: Omit<ChatMessage, 'id'>) => void;
   onClearToast?: () => void;
@@ -51,7 +58,12 @@ export default function AdminPanel({
   onAdminClockOutUser,
   onUpdateUserStatus,
   onAddUser,
+  onSaveUser,
   onDeleteUser,
+  secured,
+  rulesPublished,
+  onSecureAccounts,
+  onSignOut,
   onUpdateJobStatus,
   onSendMessage,
   onClearToast
@@ -84,12 +96,12 @@ export default function AdminPanel({
 
     const assignedUser = users.find(u => u.id === jobAssignee);
     if (!assignedUser) {
-      alert("Please select a valid technician.");
+      showAlert("Please select a valid technician.");
       return;
     }
 
     if (assignedUser.role === 'super-admin' && currentUserRole !== 'super-admin') {
-      alert("You cannot assign the CEO/Super-Admin to tickets.");
+      showAlert("You cannot assign the CEO/Super-Admin to tickets.");
       return;
     }
 
@@ -267,7 +279,17 @@ export default function AdminPanel({
         )}
 
         {activeTab === 'team' && (currentUserRole === 'super-admin' || currentUserRole === 'admin' || currentUserRole === 'head-procurement') && (
-          <TeamWidget users={users} currentUserRole={currentUserRole} onUpdateUserStatus={onUpdateUserStatus} onAddUser={onAddUser} onDeleteUser={onDeleteUser} />
+          <TeamWidget
+            users={users}
+            currentUserRole={currentUserRole}
+            secured={secured}
+            rulesPublished={rulesPublished}
+            onAddUser={onAddUser}
+            onSaveUser={onSaveUser}
+            onDeleteUser={onDeleteUser}
+            onSecureAccounts={onSecureAccounts}
+            onSignOut={onSignOut}
+          />
         )}
 
         {activeTab === 'tickets' && (
@@ -534,8 +556,8 @@ export default function AdminPanel({
 
       {/* DISPATCH NEW JOB FORM MODAL */}
       {showAddJobModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade">
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-6 w-full max-w-lg shadow-2xl relative animate-scale">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade overflow-y-auto">
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-6 w-full max-w-lg shadow-2xl relative animate-scale m-auto">
             <button
               onClick={() => setShowAddJobModal(false)}
               className="absolute top-4 right-4 text-stone-400 hover:text-white font-mono text-sm shadow"
@@ -669,7 +691,7 @@ export default function AdminPanel({
       )}
 
       {/* Floating Bottom Navigation Pill (Netflix Style) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
+      <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
         <div className="bg-[#1a1a1a]/40 backdrop-blur-2xl border border-white/10 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
           <div className="flex items-center overflow-x-auto scrollbar-hide snap-x w-full">
             <button

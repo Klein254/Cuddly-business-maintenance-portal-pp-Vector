@@ -1,0 +1,7 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.vector_portal" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Same near-black as the web UI, so there's no white flash while the app starts -->
+        <item name="android:windowBackground">@color/vector_background</item>
+    </style>
+</resources>

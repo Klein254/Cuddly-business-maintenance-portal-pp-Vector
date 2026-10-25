@@ -1,37 +1,44 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { ShieldCheck, User as UserIcon, Lock } from 'lucide-react';
+import { signIn, SignInError, SignInProblem, takeSignInNotice } from '../auth';
 
 interface LoginScreenProps {
-  users: User[];
-  onLogin: (user: User, rememberMe: boolean) => void;
+  // Called for accounts that haven't been secured yet; secured sign-ins are picked up by App automatically
+  onLegacyLogin: (user: User, rememberMe: boolean) => void;
 }
 
-export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
+const SIGN_IN_MESSAGES: Record<SignInProblem, string> = {
+  'invalid': 'Invalid username or password',
+  'too-many-attempts': 'Too many attempts. Wait a few minutes, then try again.',
+  'offline': 'No connection. Signing in needs internet access.',
+  'unavailable': 'Sign-in failed. Please try again.'
+};
+
+// Read once per page load (e.g. "your session has ended" after an admin resets a password)
+const initialNotice = takeSignInNotice();
+
+export default function LoginScreen({ onLegacyLogin }: LoginScreenProps) {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [rememberMe, setRememberMe] = useState<boolean>(false);
+  const [signingIn, setSigningIn] = useState<boolean>(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) {
       setError('Please provide username and password');
       return;
     }
-    
-    // Find user by username (case insensitive)
-    const targetUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    
-    if (!targetUser) {
-      setError('Invalid username or password');
-      return;
-    }
 
-    if (targetUser.pin === password) {
-      onLogin(targetUser, rememberMe);
-    } else {
-      setError('Invalid username or password');
+    setSigningIn(true);
+    try {
+      const result = await signIn(username, password, rememberMe);
+      if (result.kind === 'legacy') onLegacyLogin(result.user, rememberMe);
+    } catch (err) {
+      setError(SIGN_IN_MESSAGES[err instanceof SignInError ? err.problem : 'unavailable']);
+      setSigningIn(false);
     }
   };
 
@@ -55,6 +62,11 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
+          {initialNotice && !error && (
+            <div className="bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs text-center p-2 rounded">
+              {initialNotice}
+            </div>
+          )}
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-xs text-center p-2 rounded">
               {error}
@@ -114,10 +126,11 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
           <button
             type="submit"
-            className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black text-sm uppercase py-3 rounded tracking-wider flex items-center justify-center gap-2 transition-colors mt-2"
+            disabled={signingIn}
+            className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black font-black text-sm uppercase py-3 rounded tracking-wider flex items-center justify-center gap-2 transition-colors mt-2"
           >
             <ShieldCheck className="h-5 w-5" />
-            Initialize Session
+            {signingIn ? 'Verifying…' : 'Initialize Session'}
           </button>
         </form>
 

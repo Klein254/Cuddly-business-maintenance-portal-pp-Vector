@@ -1,9 +1,231 @@
 rules_version = '2';
+
+// Vector Technical: who may read and change what. Enforced by Firebase's servers for every request,
+// so it holds even against someone who bypasses the app.
+//
+// Identity: people sign in with Firebase Authentication (src/auth.ts). Their account email is
+// `<user id>+<random>@<auth domain>`, and users/{id}.authEmail names the one account currently allowed
+// to act as that person. Resetting a password repoints authEmail, which locks the old one out at once.
+//
+// Roles (users/{id}.role): employee, admin, head-procurement, finance, super-admin (CEO).
+//
+// Publish these only after an administrator has run Team Management → Account Security →
+// "Secure all accounts" (README → Security); until then nobody has a sign-in these rules accept.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    // ---------------------------------------------------------------- who is asking
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email is string;
     }
+
+    function myId() {
+      return request.auth.token.email.split('@')[0].split('[+]')[0];
+    }
+
+    function userIdOf(email) {
+      return email.split('@')[0].split('[+]')[0];
+    }
+
+    function profile(userId) {
+      return get(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function me() {
+      return profile(myId());
+    }
+
+    // A current member of staff: the account they signed in with is the one on their staff record
+    function isStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(myId()))
+        && me().data.get('authEmail', '') == request.auth.token.email;
+    }
+
+    function hasRole(roles) {
+      return isStaff() && me().data.role in roles;
+    }
+
+    function isAdminRole() { return hasRole(['super-admin', 'admin', 'head-procurement', 'finance']); }
+    function isPeopleManager() { return hasRole(['super-admin', 'head-procurement']); }
+    function isPayroll() { return hasRole(['super-admin', 'finance']); }
+    function isSuperAdmin() { return hasRole(['super-admin']); }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // Only the CEO may create a super-admin, promote someone to it, or change one
+    function superAdminSafe(roleBefore, roleAfter) {
+      return (roleBefore != 'super-admin' && roleAfter != 'super-admin') || isSuperAdmin();
+    }
+
+    // ---------------------------------------------------------------- staff directory
+
+    match /users/{userId} {
+      allow read: if isStaff();
+
+      allow create: if isPeopleManager()
+        && request.resource.data.id == userId
+        && request.resource.data.authEmail is string
+        && userIdOf(request.resource.data.authEmail) == userId
+        && !('pin' in request.resource.data)
+        && !('balanceDue' in request.resource.data)
+        && superAdminSafe('', request.resource.data.role);
+
+      allow update: if isStaff() && (
+        // Your own presence, read receipts and display preference
+        (userId == myId()
+          && changedOnly(['isOnline', 'lastActiveUpdatedAt', 'lastReadNotificationsAt', 'lastReadMessagesAt', 'themePreference']))
+        // Fleet vehicle assignment
+        || (isAdminRole() && changedOnly(['vehicleNumber']))
+        // Personnel file: details, role, username and sign-in (password resets)
+        || (isPeopleManager()
+          && changedOnly(['name', 'position', 'email', 'phone', 'username', 'role', 'authEmail', 'avatarColor'])
+          && superAdminSafe(resource.data.role, request.resource.data.role)
+          && userIdOf(request.resource.data.get('authEmail', userId + '@')) == userId)
+      );
+
+      allow delete: if isPeopleManager() && resource.data.role != 'super-admin';
+    }
+
+    // ---------------------------------------------------------------- sign-in lookup
+    // Maps the lower-case surname typed at sign-in to that person's account email. Readable signed out,
+    // but only one name at a time (no listing), so the staff list can't be downloaded from here.
+
+    function validUsernameEntry(name) {
+      let entry = request.resource.data;
+      let staff = getAfter(/databases/$(database)/documents/users/$(entry.userId)).data;
+      return entry.keys().hasOnly(['userId', 'email'])
+        && userIdOf(entry.email) == entry.userId
+        && staff.authEmail == entry.email
+        && staff.username.trim().lower().replace('/', '_') == name
+        && (staff.role != 'super-admin' || isSuperAdmin());
+    }
+
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isPeopleManager() && validUsernameEntry(name);
+      allow update: if isPeopleManager() && validUsernameEntry(name)
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isPeopleManager()
+        && (!existsAfter(/databases/$(database)/documents/users/$(resource.data.userId))
+          || getAfter(/databases/$(database)/documents/users/$(resource.data.userId)).data.role != 'super-admin'
+          || isSuperAdmin());
+    }
+
+    // ---------------------------------------------------------------- pay owed
+    // Kept apart from the staff directory so colleagues can't read each other's balances.
+
+    // Adding a job's payout to the technician's balance, in the same write that first completes the job
+    function isJobCredit(userId) {
+      let jobPath = /databases/$(database)/documents/jobs/$(request.resource.data.lastCreditedJobId);
+      let before = get(jobPath).data;
+      let after = getAfter(jobPath).data;
+      let previous = resource == null ? 0 : resource.data.balanceDue;
+      return (userId == myId() || isAdminRole())
+        && request.resource.data.keys().hasOnly(['balanceDue', 'lastCreditedJobId'])
+        && after.assignedUserId == userId
+        && before.status != 'completed'
+        && before.get('credited', false) == false
+        && after.status == 'completed'
+        && after.credited == true
+        && request.resource.data.balanceDue == previous + before.payoutAmount;
+    }
+
+    match /balances/{userId} {
+      allow read: if isStaff() && (userId == myId() || isPayroll());
+      allow create: if isStaff() && (isPayroll() || isJobCredit(userId)
+        || (isPeopleManager()
+          && request.resource.data.keys().hasOnly(['balanceDue'])
+          && request.resource.data.balanceDue == 0));
+      allow update: if isStaff() && (isPayroll() || isJobCredit(userId));
+      allow delete: if isPeopleManager();
+    }
+
+    // ---------------------------------------------------------------- jobs
+
+    // A technician moving their own job one step along: pending → on-site → in-progress → completed
+    function isOwnJobProgress() {
+      let was = resource.data;
+      let next = request.resource.data;
+      return was.assignedUserId == myId()
+        && changedOnly(['status', 'startedAt', 'completedAt', 'loggedMaterials', 'signature', 'statusHistory', 'credited'])
+        && ((was.status == 'pending' && next.status == 'on-site')
+          || (was.status == 'on-site' && next.status == 'in-progress')
+          || (was.status == 'in-progress' && next.status == 'completed'))
+        && (next.get('credited', false) == was.get('credited', false)
+          || (next.status == 'completed' && next.credited == true));
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isStaff() && (isAdminRole() || resource.data.assignedUserId == myId());
+      allow create: if isAdminRole()
+        && request.resource.data.id == jobId
+        && request.resource.data.get('credited', false) == false
+        && (profile(request.resource.data.assignedUserId).data.role != 'super-admin' || isSuperAdmin());
+      allow update: if isStaff() && (isAdminRole() || isOwnJobProgress());
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- roster
+
+    match /shifts/{shiftId} {
+      allow read: if isStaff() && (isAdminRole() || resource.data.userId == myId());
+      allow create: if isAdminRole()
+        && (profile(request.resource.data.userId).data.role != 'super-admin' || isSuperAdmin());
+      allow update, delete: if isAdminRole();
+    }
+
+    // ---------------------------------------------------------------- clock-in logs
+
+    function isOwnClockOut() {
+      return resource.data.userId == myId()
+        && resource.data.clockOutTime == null
+        && request.resource.data.clockOutTime is string
+        && changedOnly(['clockOutTime', 'totalHours', 'overtimeHours', 'calculatedPay']);
+    }
+
+    match /clockLogs/{logId} {
+      allow read: if isStaff() && (isAdminRole() || resource.data.userId == myId());
+      allow create: if isStaff()
+        && request.resource.data.userId == myId()
+        && request.resource.data.verified == false
+        && request.resource.data.clockOutTime == null;
+      allow update: if isStaff() && (isAdminRole() || isOwnClockOut());
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- alerts
+
+    match /notifications/{notifId} {
+      allow read: if isStaff() && (isAdminRole() || resource.data.recipientUserId in [myId(), 'all']);
+      // Admins broadcast anything; technicians can only file job status reports to the admins
+      allow create: if isStaff() && (isAdminRole()
+        || (request.resource.data.recipientUserId == 'admins' && request.resource.data.type == 'job'));
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------- Comms Hub
+    // Everyone (admins included) sees the General channel and only their own direct messages.
+
+    match /messages/{messageId} {
+      allow read: if isStaff()
+        && (resource.data.recipientId == 'general'
+          || resource.data.recipientId == myId()
+          || resource.data.senderId == myId());
+      allow create: if isStaff()
+        && request.resource.data.senderId == myId()
+        && request.resource.data.senderName == me().data.name
+        && request.resource.data.senderRole == me().data.role
+        && (request.resource.data.recipientId == 'general'
+          || exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId)));
+      allow update, delete: if false;
+    }
+
+    // Anything else (including system/rules-check, which the app reads to tell whether these rules are live) is closed.
   }
 }
-

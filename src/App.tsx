@@ -1,23 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ShieldAlert, Settings, Wifi, UserCheck, Bell, Sparkles, 
+  ShieldAlert, Settings, Wifi, WifiOff, UserCheck, Bell, Sparkles, 
   MapPin, LogOut, CheckCircle, Database, HelpCircle, AlertTriangle 
 } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { User, Shift, ClockLog, Job, PushNotificationLog, ChatMessage } from './types';
 import AdminPanel from './components/AdminPanel';
 import EmployeePortal from './components/EmployeePortal';
 import LoginScreen from './components/LoginScreen';
-import { useFirebase } from './useFirebase';
+import { useFirebase, Session, ADMIN_ROLES, PEOPLE_MANAGER_ROLES, newId } from './useFirebase';
+import { useOnlineStatus } from './useOnlineStatus';
+import { initNotifications, showSystemNotification, confirmAction } from './platform';
+import { auth } from './firebase';
+import {
+  LEGACY_SESSION_KEY, userIdFromAuthEmail, endSession, changesSynced, setSignInNotice, accountErrorMessage,
+  createStaffMember, updateStaffMember, deleteStaffMember, secureAllAccounts, secureRulesPublished
+} from './auth';
+
+const roundHours = (hrs: number) => Math.round(hrs * 100) / 100;
 
 export default function App() {
-  const {
-    users, shifts, clockLogs, jobs, notifications, messages, loading,
-    addClockLog, updateClockLog, addJob, updateJob, addShift, deleteShift, updateUser, deleteUser, addNotification, addMessage
-  } = useFirebase();
+  // Who is signed in: a Firebase Authentication account, or (until accounts are secured) the old PIN check
+  const [session, setSession] = useState<Session | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Authentication state
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  useEffect(() => onAuthStateChanged(auth, firebaseUser => {
+    if (firebaseUser?.email) {
+      setSession({ userId: userIdFromAuthEmail(firebaseUser.email), mode: 'secured' });
+    } else {
+      // "Keep me logged in" from before accounts were secured
+      let savedId: string | null = null;
+      try { savedId = localStorage.getItem(LEGACY_SESSION_KEY); } catch (e) {}
+      setSession(savedId ? { userId: savedId, mode: 'legacy' } : null);
+    }
+    setAuthChecked(true);
+  }), []);
+
+  const {
+    users, shifts, clockLogs, jobs, notifications, messages, loading, usersConfirmed, accessError,
+    updateUserFields, setBalance, addClockLog, updateClockLogFields, addJob, updateJobStatus,
+    addShift, deleteShift, saveLegacyUser, deleteLegacyUser, addNotification, addMessage
+  } = useFirebase(session);
+  const isNetworkOnline = useOnlineStatus();
+
+  const currentUser = session ? users.find(u => u.id === session.userId) ?? null : null;
   const [isAdminView, setIsAdminView] = useState<boolean>(true);
+  // Whether the locked-down database rules are live (checked for people who manage accounts)
+  const [rulesPublished, setRulesPublished] = useState<boolean | null>(null);
 
   // Notification banners (Live simulated toast logs)
   const [activeToast, setActiveToast] = useState<{ id: string; title: string; desc: string; type: string } | null>(null);
@@ -25,17 +54,9 @@ export default function App() {
   // Track recent notifications to avoid duplicate toast alerts during initial load
   const [seenNotificationIds, setSeenNotificationIds] = useState<Set<string>>(new Set());
 
-  // Request Web Notification permission and register Service Worker
+  // Request notification permission (browser or installed app)
   useEffect(() => {
-    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-      Notification.requestPermission();
-    }
-    // Register a dummy service worker to allow push notifications on Android Chrome
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(err => {
-        console.warn('Service Worker registration failed:', err);
-      });
-    }
+    initNotifications();
   }, []);
 
   // Listen for new notifications addressed to the current user
@@ -44,7 +65,8 @@ export default function App() {
     
     notifications.forEach(notif => {
       // Only show toast if it's for this user and we haven't seen it yet
-      const isForMe = notif.recipientUserId === currentUser.id || notif.recipientUserId === 'all';
+      const isForMe = notif.recipientUserId === currentUser.id || notif.recipientUserId === 'all' ||
+        (notif.recipientUserId === 'admins' && ADMIN_ROLES.includes(currentUser.role));
       if (isForMe && !seenNotificationIds.has(notif.id)) {
         // Skip toast for notifications that are older than 5 minutes to avoid bombarding on login
         if (new Date().getTime() - new Date(notif.timestamp).getTime() < 5 * 60 * 1000) {
@@ -114,19 +136,8 @@ export default function App() {
       osc.stop(audioCtx.currentTime + 0.35);
     } catch (e) {}
 
-    // Trigger internal OS Web Notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(title, { body: desc, icon: '/favicon.svg' });
-      } catch (e) {
-        // Fallback for Android Chrome which requires ServiceWorkerRegistration.showNotification()
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, { body: desc, icon: '/favicon.svg' });
-          });
-        }
-      }
-    }
+    // Trigger internal OS Notification
+    showSystemNotification(title, desc);
 
     // Auto dismiss after 5s
     setTimeout(() => {
@@ -134,59 +145,54 @@ export default function App() {
     }, 5000);
   };
 
-  const handleLogin = (user: User, rememberMe: boolean) => {
-    setCurrentUser(user);
-    if (rememberMe) {
-      localStorage.setItem('vector_saved_user_id', user.id);
-    } else {
-      localStorage.removeItem('vector_saved_user_id');
-    }
-    updateUser({ ...user, isOnline: true, lastActiveUpdatedAt: new Date().toISOString() });
-  };
-
-  const handleLogout = () => {
-    if (currentUser) {
-      updateUser({ ...currentUser, isOnline: false, lastActiveUpdatedAt: new Date().toISOString() });
-    }
-    setCurrentUser(null);
-    localStorage.removeItem('vector_saved_user_id');
-  };
-
-  // Attempt automatic login from localStorage if available
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      const savedId = localStorage.getItem('vector_saved_user_id');
-      if (savedId) {
-        const u = users.find(x => x.id === savedId);
-        if (u) {
-          setCurrentUser(u);
-          updateUser({ ...u, isOnline: true, lastActiveUpdatedAt: new Date().toISOString() });
-        } else {
-          localStorage.removeItem('vector_saved_user_id');
-        }
+  // Sign-ins for accounts that haven't been secured yet (Firebase sign-ins arrive via onAuthStateChanged)
+  const handleLegacyLogin = (user: User, rememberMe: boolean) => {
+    try {
+      if (rememberMe) {
+        localStorage.setItem(LEGACY_SESSION_KEY, user.id);
+      } else {
+        localStorage.removeItem(LEGACY_SESSION_KEY);
       }
+    } catch (e) {}
+    setSession({ userId: user.id, mode: 'legacy' });
+  };
+
+  const handleLogout = async () => {
+    if (currentUser) {
+      updateUserFields(currentUser.id, { isOnline: false, lastActiveUpdatedAt: new Date().toISOString() }).catch(() => {});
     }
-  }, [loading, users, currentUser]);
-  // Use a ref to hold the latest users array to avoid stale closures in event listeners
-  const usersRef = React.useRef(users);
+    // Signing out wipes this device's offline copy of the data, so don't lose changes that haven't synced
+    if (!(await changesSynced())) {
+      const proceed = await confirmAction("Some changes made on this device haven't reached the server yet (no connection). Signing out now will discard them. Sign out anyway?");
+      if (!proceed) return;
+    }
+    endSession();
+  };
+
+  // Signed in but no longer allowed in (password reset or account removed by an admin, or the secure
+  // database rules were just published): go back to the sign-in screen
   useEffect(() => {
-    usersRef.current = users;
-  }, [users]);
+    if (!session || loading) return;
+    if (accessError || (usersConfirmed && !currentUser)) {
+      setSignInNotice(session.mode === 'legacy'
+        ? 'Sign-in has been upgraded. Please sign in again with your usual surname and password.'
+        : 'Your session has ended because your sign-in details changed. Please sign in again.');
+      endSession();
+    }
+  }, [session, loading, accessError, usersConfirmed, currentUser]);
+
+  // People who manage accounts are reminded until the locked-down database rules are published
+  useEffect(() => {
+    if (!currentUser || !PEOPLE_MANAGER_ROLES.includes(currentUser.role)) return;
+    secureRulesPublished().then(setRulesPublished);
+  }, [currentUser?.id, currentUser?.role]);
 
   // Track page visibility / online status
   useEffect(() => {
     if (!currentUser) return;
 
     const updateOnlineStatus = (isOnline: boolean) => {
-      // Use usersRef.current to get the most up-to-date user data without adding to dependency array
-      const u = usersRef.current.find(x => x.id === currentUser.id);
-      if (u) {
-        updateUser({ 
-          ...u, 
-          isOnline, 
-          lastActiveUpdatedAt: new Date().toISOString() 
-        });
-      }
+      updateUserFields(currentUser.id, { isOnline, lastActiveUpdatedAt: new Date().toISOString() }).catch(() => {});
     };
 
     const handleVisibilityChange = () => {
@@ -222,21 +228,11 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
 
-  // Sync currentUser with users array to get real-time updates
-  useEffect(() => {
-    if (currentUser && users.length > 0) {
-      const updatedUser = users.find(u => u.id === currentUser.id);
-      if (updatedUser && JSON.stringify(updatedUser) !== JSON.stringify(currentUser)) {
-        setCurrentUser(updatedUser);
-      }
-    }
-  }, [users, currentUser]);
-
   // Clock in handler
   const handleClockIn = async (notes?: string) => {
     if (!currentUser) return;
     const newLog: ClockLog = {
-      id: `l-now-${Date.now()}`,
+      id: newId('l'),
       userId: currentUser.id,
       userName: currentUser.name,
       clockInTime: new Date().toISOString(),
@@ -257,26 +253,18 @@ export default function App() {
     const outTime = new Date().toISOString();
     const diffMs = new Date(outTime).getTime() - new Date(activeLog.clockInTime).getTime();
     const hrs = diffMs / 3600000;
-    
+
     // Split timesheets
-    let normH = hrs;
-    let ovH = 0;
-    if (hrs > 8) {
-      normH = 8;
-      ovH = hrs - 8;
-    }
+    const ovH = hrs > 8 ? hrs - 8 : 0;
 
     const pay = 0; // Employees are paid based on jobs completed, not clock time.
 
-    const updatedLog: ClockLog = {
-      ...activeLog,
+    await updateClockLogFields(activeLog.id, {
       clockOutTime: outTime,
-      totalHours: hrs,
-      overtimeHours: ovH,
-      calculatedPay: pay,
-      verified: false
-    };
-    await updateClockLog(updatedLog);
+      totalHours: roundHours(hrs),
+      overtimeHours: roundHours(ovH),
+      calculatedPay: pay
+    });
   };
 
   // Update job statuses (pending -> on-site -> in-progress -> completed)
@@ -290,34 +278,35 @@ export default function App() {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
-    const historyUpdate = [...job.statusHistory, { status, timestamp: rightNow }];
-    const updatedJob: Job = {
-      ...job,
+    const fields: Partial<Job> = {
       status,
-      startedAt: (status === 'on-site' || status === 'in-progress' && !job.startedAt) ? rightNow : job.startedAt,
-      completedAt: status === 'completed' ? rightNow : job.completedAt,
-      loggedMaterials: materials ? [...job.loggedMaterials, ...materials] : job.loggedMaterials,
-      signature: signature || job.signature,
-      statusHistory: historyUpdate
+      statusHistory: [...job.statusHistory, { status, timestamp: rightNow }]
     };
-    await updateJob(updatedJob);
+    if ((status === 'on-site' || status === 'in-progress') && !job.startedAt) fields.startedAt = rightNow;
+    if (status === 'completed') fields.completedAt = rightNow;
+    if (materials && materials.length > 0) fields.loggedMaterials = [...job.loggedMaterials, ...materials];
+    if (signature) fields.signature = signature;
 
-    // If job is completed, credit the user's balance
-    if (status === 'completed' && job.payoutAmount > 0) {
-      const assignedUser = users.find(u => u.id === job.assignedUserId);
-      if (assignedUser) {
-        await updateUser({ ...assignedUser, balanceDue: (assignedUser.balanceDue || 0) + job.payoutAmount });
-      }
+    // Credit the technician's balance once, the first time the job is completed (re-marking it never pays twice)
+    const firstCompletion = status === 'completed' && job.status !== 'completed' && !job.credited;
+    if (firstCompletion) fields.credited = true;
+    const credit = firstCompletion && job.payoutAmount > 0 ? { userId: job.assignedUserId, amount: job.payoutAmount } : undefined;
+    try {
+      await updateJobStatus(jobId, fields, credit);
+    } catch (err) {
+      console.error('Job status update failed:', err);
+      triggerToastAlert('Status Update Failed', accountErrorMessage(err), 'alert');
+      return;
     }
 
     // Push broadcast
     const newBroadcast: PushNotificationLog = {
-      id: `n-${Date.now()}`,
+      id: newId('n'),
       title: 'Status Update Filed',
       message: `Technician ${currentUser?.name} reported "${status.toUpperCase()}" status for job "${job.title}".`,
       timestamp: rightNow,
-      recipientUserId: 'admin-1', // admin
-      recipientUserName: 'Director Marcus Vector',
+      recipientUserId: 'admins',
+      recipientUserName: 'Operations Admins',
       isSent: true,
       type: 'job'
     };
@@ -332,7 +321,7 @@ export default function App() {
 
     const jobInstance: Job = {
       ...newJob,
-      id: `job-${Date.now()}`,
+      id: newId('job'),
       status: 'pending',
       assignedUserName: workerName,
       startedAt: null,
@@ -345,7 +334,7 @@ export default function App() {
     await addJob(jobInstance);
 
     const newBroadcast: PushNotificationLog = {
-      id: `n-${Date.now()}`,
+      id: newId('n'),
       title: 'New Maintenance Dispatch Assigned',
       message: `You have been assigned: "${newJob.title}" at site ${newJob.locationName}. Please acknowledge.`,
       timestamp: new Date().toISOString(),
@@ -360,14 +349,14 @@ export default function App() {
 
   // Add shift schedule (rota)
   const handleAddShift = async (newShift: Omit<Shift, 'id'>) => {
-    const shiftInstance: Shift = { ...newShift, id: `s-${Date.now()}` };
+    const shiftInstance: Shift = { ...newShift, id: newId('s') };
     await addShift(shiftInstance);
     
     const worker = users.find(x => x.id === newShift.userId);
     const workerName = worker ? worker.name : 'Unknown';
 
     const newBroadcast: PushNotificationLog = {
-      id: `n-${Date.now()}`,
+      id: newId('n'),
       title: 'Work Rota Update',
       message: `New shift scheduled for ${newShift.date} [${newShift.startTime} - ${newShift.endTime}] has been added to the master roster ledger.`,
       timestamp: new Date().toISOString(),
@@ -386,7 +375,7 @@ export default function App() {
   };
 
   const handleDispatchNotification = async (newNotification: Omit<PushNotificationLog, 'id' | 'timestamp' | 'isSent'>) => {
-    const broadcastInstance: PushNotificationLog = { ...newNotification, id: `n-${Date.now()}`, timestamp: new Date().toISOString(), isSent: true };
+    const broadcastInstance: PushNotificationLog = { ...newNotification, id: newId('n'), timestamp: new Date().toISOString(), isSent: true };
     await addNotification(broadcastInstance);
     triggerToastAlert(broadcastInstance.title, broadcastInstance.message, broadcastInstance.type);
   };
@@ -394,7 +383,7 @@ export default function App() {
   const handleVerifyClockLog = async (id: string) => {
     const log = clockLogs.find(x => x.id === id);
     if (!log) return;
-    await updateClockLog({ ...log, verified: true });
+    await updateClockLogFields(id, { verified: true });
     triggerToastAlert('Ledger Approved & Locked', `Biometric timesheet for ${log.userName} successfully certified.`, 'payroll');
   };
 
@@ -404,12 +393,13 @@ export default function App() {
     const now = new Date().toISOString();
     const diffMs = new Date(now).getTime() - new Date(log.clockInTime).getTime();
     const hrs = diffMs / 3600000;
-    
-    await updateClockLog({
-      ...log,
+
+    // Same as a technician's own clock-out: hours only, since pay comes from completed jobs
+    await updateClockLogFields(id, {
       clockOutTime: now,
-      totalHours: Number(hrs.toFixed(2)),
-      calculatedPay: Number((hrs * 25).toFixed(2)) // 25 is default base pay assumed in ClockWidget
+      totalHours: roundHours(hrs),
+      overtimeHours: roundHours(hrs > 8 ? hrs - 8 : 0),
+      calculatedPay: 0
     });
     
     triggerToastAlert('User Checked Out', `Admin safely logged out ${log.userName}.`, 'system');
@@ -418,22 +408,26 @@ export default function App() {
   const handleUpdateUserStatus = async (userId: string, updates: Partial<User>) => {
     const u = users.find(x => x.id === userId);
     if (!u) return;
-    
-    // Optimistic UI updates
-    if (currentUser?.id === userId) {
-      setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
-      
-      // Also apply theme immediately
-      if (updates.themePreference !== undefined) {
-        if (updates.themePreference === 'high-contrast') {
-          document.documentElement.setAttribute('data-theme', 'high-contrast');
-        } else {
-          document.documentElement.removeAttribute('data-theme');
-        }
+
+    // Apply theme immediately
+    if (currentUser?.id === userId && updates.themePreference !== undefined) {
+      if (updates.themePreference === 'high-contrast') {
+        document.documentElement.setAttribute('data-theme', 'high-contrast');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
       }
     }
-    
-    await updateUser({ ...u, ...updates });
+
+    // Pay owed is kept apart from the staff directory (see setBalance)
+    const { balanceDue, ...fields } = updates;
+    try {
+      if (balanceDue !== undefined) await setBalance(userId, balanceDue);
+      if (Object.keys(fields).length > 0) await updateUserFields(userId, fields);
+    } catch (err) {
+      console.error('Personnel update failed:', err);
+      triggerToastAlert('Update Failed', accountErrorMessage(err), 'alert');
+      return;
+    }
     // Don't trigger a toast if the only update is reading notifications/messages or online status
     const isSilentUpdate = Object.keys(updates).every(k => 
       k === 'lastReadNotificationsAt' || 
@@ -446,25 +440,78 @@ export default function App() {
     }
   };
 
-  const handleAddUser = async (user: User) => {
-    await updateUser(user); // since updateUser uses setDoc, it'll create a new document if it doesn't exist
+  // Once accounts are secured, creating/editing/removing people also manages their sign-in (src/auth.ts)
+  const handleAddUser = async (user: User, password: string) => {
+    try {
+      if (session?.mode === 'secured') {
+        await createStaffMember(user, password);
+      } else {
+        await saveLegacyUser({ ...user, pin: password });
+      }
+    } catch (err) {
+      console.error('Creating personnel file failed:', err);
+      triggerToastAlert('Personnel File Not Created', accountErrorMessage(err), 'alert');
+      return false;
+    }
     triggerToastAlert('New Personnel File Created', `Added ${user.name} to the system.`, 'system');
+    return true;
+  };
+
+  const handleSaveUser = async (user: User, changes: Partial<User>, newPassword?: string) => {
+    try {
+      if (session?.mode === 'secured') {
+        await updateStaffMember(user, changes, newPassword);
+      } else {
+        await updateUserFields(user.id, newPassword ? { ...changes, pin: newPassword } : changes);
+      }
+    } catch (err) {
+      console.error('Saving personnel file failed:', err);
+      triggerToastAlert('Personnel File Not Updated', accountErrorMessage(err), 'alert');
+      return false;
+    }
+    triggerToastAlert('Personnel File Updated', `Adjustments made to ${user.name}.`, 'system');
+    return true;
   };
 
   const handleDeleteUser = async (userId: string) => {
-    await deleteUser(userId);
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+    try {
+      if (session?.mode === 'secured') {
+        await deleteStaffMember(u);
+      } else {
+        await deleteLegacyUser(userId);
+      }
+    } catch (err) {
+      console.error('Deleting personnel file failed:', err);
+      triggerToastAlert('Personnel File Not Deleted', accountErrorMessage(err), 'alert');
+      return;
+    }
     triggerToastAlert('Personnel File Deleted', `Removed user from the sector.`, 'system');
+  };
+
+  // One-time switch-over to secure sign-in (Team Management → Account Security)
+  const handleSecureAccounts = async () => {
+    try {
+      const report = await secureAllAccounts();
+      setRulesPublished(await secureRulesPublished());
+      return report;
+    } catch (err) {
+      console.error('Securing accounts failed:', err);
+      triggerToastAlert('Accounts Not Secured', accountErrorMessage(err), 'alert');
+      return null;
+    }
   };
 
   const handleSendMessage = (msg: Omit<ChatMessage, 'id'>) => {
     const newMessage: ChatMessage = {
       ...msg,
-      id: Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+      id: newId('m')
     };
     addMessage(newMessage);
   };
 
-  if (loading) {
+  if (!authChecked || loading || (session && !currentUser)) {
     return (
       <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center">
         <div className="w-10 h-10 bg-amber-400 flex items-center justify-center rounded-sm shrink-0 mb-4 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
@@ -476,14 +523,14 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginScreen users={users} onLogin={handleLogin} />;
+    return <LoginScreen onLegacyLogin={handleLegacyLogin} />;
   }
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none antialiased selection:bg-amber-400 selection:text-black">
       
       {/* Main Top Header containing the Custom geometric logo matching image */}
-      <header className="bg-[#0F0F0F] border-b border-stone-800 p-4 sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
+      <header className="bg-[#0F0F0F] border-b border-stone-800 p-4 pt-[calc(1rem+env(safe-area-inset-top))] sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           
           {/* Custom VECTOR TECHNICAL branded geometric frame */}
@@ -542,6 +589,16 @@ export default function App() {
           </div>
 
         </div>
+
+        {/* Offline notice: work continues on the local copy and syncs automatically on reconnect */}
+        {!isNetworkOnline && (
+          <div className="max-w-7xl mx-auto mt-3 flex items-center justify-center gap-2 bg-amber-400/10 border border-amber-400/30 rounded px-3 py-1.5 text-center">
+            <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <span className="font-mono text-[9px] sm:text-[10px] text-amber-400 uppercase tracking-widest">
+              Offline Mode &bull; Changes are saved on this device and will sync automatically when the connection returns
+            </span>
+          </div>
+        )}
       </header>
 
       {/* Main Container */}
@@ -549,7 +606,7 @@ export default function App() {
         
         {/* Urgent alert banners (simulating live notifications from push notifications) */}
         {activeToast && (
-          <div className="fixed top-18 right-4 z-50 animate-enter max-w-sm w-full shadow-2xl overflow-hidden rounded-lg border border-amber-400 bg-stone-900/95 backdrop-blur-md p-4">
+          <div className="fixed top-[calc(4.5rem+env(safe-area-inset-top))] right-4 z-50 animate-enter max-w-sm w-[calc(100vw-2rem)] shadow-2xl overflow-hidden rounded-lg border border-amber-400 bg-stone-900/95 backdrop-blur-md p-4">
             <div className="flex items-start gap-3">
               <div className={`p-1.5 rounded-full ${
                 activeToast.type === 'alert' ? 'bg-red-500 text-white' : 
@@ -593,7 +650,12 @@ export default function App() {
             onAdminClockOutUser={handleAdminClockOutUser}
             onUpdateUserStatus={handleUpdateUserStatus}
             onAddUser={handleAddUser}
+            onSaveUser={handleSaveUser}
             onDeleteUser={handleDeleteUser}
+            secured={session?.mode === 'secured'}
+            rulesPublished={rulesPublished}
+            onSecureAccounts={handleSecureAccounts}
+            onSignOut={handleLogout}
             onUpdateJobStatus={handleUpdateJobStatus}
             onSendMessage={handleSendMessage}
             onClearToast={() => setActiveToast(null)}

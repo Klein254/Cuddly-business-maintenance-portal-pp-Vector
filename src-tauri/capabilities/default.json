@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for the main window: notifications, native dialogs, and saving exported files the user picks in the Save dialog",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "dialog:default",
+    "fs:allow-write-text-file"
+  ]
+}

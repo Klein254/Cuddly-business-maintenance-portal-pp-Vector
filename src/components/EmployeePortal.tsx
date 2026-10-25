@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { User, Shift, ClockLog, Job, PushNotificationLog, ChatMessage } from '../types';
 import ChatWidget from './ChatWidget';
+import { saveJsonFile } from '../platform';
 
 interface EmployeePortalProps {
   employee: User;
@@ -188,14 +189,7 @@ export default function EmployeePortal({
     };
 
     const str = JSON.stringify(exportPackage, null, 2);
-    const blob = new Blob([str], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `MY_VECTOR_TELEMETRY_DATA_${employee.name.replace(/\s+/g, '_')}_2026.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    saveJsonFile(`MY_VECTOR_TELEMETRY_DATA_${employee.name.replace(/\s+/g, '_')}_2026.json`, str);
   };
 
   const myAssignedJobs = jobs.filter(j => j.assignedUserId === employee.id);
@@ -778,8 +772,8 @@ export default function EmployeePortal({
 
       {/* Completion Protocol Modal/Drawer */}
       {selectedJobToComplete && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-0 w-full max-w-lg shadow-2xl relative animate-scale overflow-hidden">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade overflow-y-auto">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-0 w-full max-w-lg shadow-2xl relative animate-scale overflow-hidden m-auto">
             {/* Header / Banner */}
             <div className="bg-gradient-to-r from-emerald-950 to-stone-900 px-6 py-5 border-b border-stone-800 relative">
               <button
@@ -894,7 +888,7 @@ export default function EmployeePortal({
       )}
 
       {/* Floating Bottom Navigation Pill (Netflix Style) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
+      <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
         <div className="bg-[#1a1a1a]/40 backdrop-blur-2xl border border-white/10 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
           <div className="flex items-center overflow-x-auto scrollbar-hide snap-x w-full">
             <button

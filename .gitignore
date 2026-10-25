@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Native app (Tauri) build output
+src-tauri/target/
+
+# App signing keys and their passwords must never be committed
+*.jks
+*.keystore
+keystore.properties

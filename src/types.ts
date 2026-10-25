@@ -6,8 +6,9 @@ export interface User {
   username: string;
   email: string;
   role: UserRole;
-  pin: string; // Used as password
-  balanceDue: number;
+  pin?: string; // Old plain-text password; removed when accounts are secured (see src/auth.ts)
+  authEmail?: string; // This person's Firebase Authentication sign-in, set when their account is secured
+  balanceDue: number; // Read from balances/{id} once the account is secured
   phone: string;
   position: string;
   vehicleNumber?: string;
@@ -58,6 +59,14 @@ export interface Job {
   signature: string | null; // base64 or drawn name
   statusHistory: { status: string; timestamp: string }[];
   payoutAmount: number;
+  credited?: boolean; // Payout already added to the technician's balance (prevents paying twice)
+}
+
+// balances/{userId}: what the company owes each person, kept apart from the staff directory
+// so colleagues can't read each other's pay
+export interface StaffBalance {
+  balanceDue: number;
+  lastCreditedJobId?: string;
 }
 
 export interface ChatMessage {
@@ -75,7 +84,7 @@ export interface PushNotificationLog {
   title: string;
   message: string;
   timestamp: string; // ISO
-  recipientUserId: string | 'all';
+  recipientUserId: string | 'all' | 'admins';
   recipientUserName: string;
   isSent: boolean;
   type: 'alert' | 'system' | 'job' | 'payroll';

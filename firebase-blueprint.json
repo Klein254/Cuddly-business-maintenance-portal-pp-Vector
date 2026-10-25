@@ -8,16 +8,16 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["employee", "admin", "super-admin"] },
-        "pin": { "type": "string" },
-        "balanceDue": { "type": "number" },
+        "role": { "type": "string", "enum": ["employee", "admin", "head-procurement", "finance", "super-admin"] },
         "phone": { "type": "string" },
         "position": { "type": "string" },
         "vehicleNumber": { "type": "string" },
         "avatarColor": { "type": "string" },
-        "themePreference": { "type": "string", "enum": ["dark", "high-contrast"] }
+        "themePreference": { "type": "string", "enum": ["dark", "high-contrast"] },
+        "username": { "type": "string" },
+        "authEmail": { "type": "string", "description": "Firebase Authentication account currently allowed to sign in as this person (passwords live in Firebase Authentication, never in Firestore)" }
       },
-      "required": ["id", "name", "email", "role", "pin", "balanceDue", "phone", "position", "avatarColor"]
+      "required": ["id", "name", "email", "role", "phone", "position", "avatarColor"]
     },
     "Shift": {
       "title": "Shift",
@@ -77,7 +77,8 @@
         "startedAt": { "type": "string" },
         "completedAt": { "type": "string" },
         "signature": { "type": "string" },
-        "payoutAmount": { "type": "number" }
+        "payoutAmount": { "type": "number" },
+        "credited": { "type": "boolean", "description": "Payout already added to the technician balance" }
       },
       "required": ["id", "title", "description", "category", "assignedUserId", "assignedUserName", "locationName", "gps_lat", "gps_lng", "status", "priority", "payoutAmount"]
     },
@@ -90,7 +91,7 @@
         "title": { "type": "string" },
         "message": { "type": "string" },
         "timestamp": { "type": "string" },
-        "recipientUserId": { "type": "string" },
+        "recipientUserId": { "type": "string", "description": "A user id, \"all\", or \"admins\"" },
         "recipientUserName": { "type": "string" },
         "isSent": { "type": "boolean" },
         "type": { "type": "string", "enum": ["alert", "system", "job", "payroll"] }
@@ -111,6 +112,26 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "senderId", "senderName", "senderRole", "recipientId", "content", "timestamp"]
+    },
+    "Balance": {
+      "title": "Balance",
+      "description": "Pay owed to one person, kept apart from the staff directory",
+      "type": "object",
+      "properties": {
+        "balanceDue": { "type": "number" },
+        "lastCreditedJobId": { "type": "string" }
+      },
+      "required": ["balanceDue"]
+    },
+    "Username": {
+      "title": "Username",
+      "description": "Sign-in lookup: lower-case surname to account email",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["userId", "email"]
     }
   },
   "firestore": {
@@ -137,6 +158,14 @@
     "/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Collection of all chat messages"
+    },
+    "/balances/{userId}": {
+      "schema": { "$ref": "#/entities/Balance" },
+      "description": "Pay owed per person (readable by that person and payroll roles)"
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/Username" },
+      "description": "Sign-in lookup by lower-case surname"
     }
   }
 }

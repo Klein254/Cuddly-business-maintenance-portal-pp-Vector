@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Plus, Clock, Users, Trash2, ClipboardList, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { User, Shift } from '../types';
+import { showAlert } from '../platform';
 
 interface CalendarWidgetProps {
   users: User[];
@@ -177,7 +178,7 @@ export default function CalendarWidget({ users, shifts, isAdmin, currentUserRole
                 onClick={() => {
                   if (!isAdmin) return;
                   if (emp.role === 'super-admin' && currentUserRole !== 'super-admin') {
-                    alert("Only the CEO (super-admin) can assign the Super-Admin to the roster.");
+                    showAlert("Only the CEO (super-admin) can assign the Super-Admin to the roster.");
                     return;
                   }
                   handleOpenAssignModal(emp);

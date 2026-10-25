@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DollarSign, FileSpreadsheet, ShieldCheck, Info } from 'lucide-react';
 import { User } from '../types';
+import { confirmAction, saveJsonFile } from '../platform';
 
 interface PaymentsWidgetProps {
   users: User[];
@@ -17,7 +18,7 @@ export default function PayrollWidget({ users, onClearPayment }: PaymentsWidgetP
   const totalOutstandingBalance = employees.reduce((acc, curr) => acc + (curr.balanceDue || 0), 0);
 
   // Trigger simulated file export
-  const exportPayrollData = () => {
+  const exportPayrollData = async () => {
     try {
       const dataObj = {
         company: "Vector Technical Maintenance & General Supply",
@@ -36,14 +37,8 @@ export default function PayrollWidget({ users, onClearPayment }: PaymentsWidgetP
       };
 
       const jsonStr = JSON.stringify(dataObj, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `VECTOR_PAYMENTS_REPORT.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const saved = await saveJsonFile(`VECTOR_PAYMENTS_REPORT.json`, jsonStr);
+      if (!saved) return;
       
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
@@ -132,8 +127,8 @@ export default function PayrollWidget({ users, onClearPayment }: PaymentsWidgetP
                   </td>
                   <td className="py-4.5 px-2 text-right">
                     <button
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to clear payments for ${employee.name}?`)) {
+                      onClick={async () => {
+                        if (await confirmAction(`Are you sure you want to clear payments for ${employee.name}?`)) {
                           onClearPayment(employee.id);
                         }
                       }}
