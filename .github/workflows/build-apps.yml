@@ -4,10 +4,13 @@ name: Build apps
 # which can only be built on a Mac.
 #   - Actions tab -> "Build apps" -> "Run workflow": installers appear under the run's Artifacts.
 #   - Push a tag such as v1.0.1: the installers are also attached to a draft GitHub Release.
+#   - Changing this file on main also runs it, so build changes are checked straight away.
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: [main]
+    paths: ['.github/workflows/build-apps.yml']
 
 permissions:
   contents: write
@@ -83,7 +86,8 @@ jobs:
 
   android:
     name: Android
-    runs-on: ubuntu-latest
+    # Pinned: GitHub's Ubuntu 24.04 machines come with the Android SDK installed
+    runs-on: ubuntu-24.04
     env:
       NDK_VERSION: 29.0.14206865
       # Repository secrets holding the release signing key (see README, "Android signing key").
@@ -103,10 +107,25 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
-        run: sdkmanager "ndk;${NDK_VERSION}"
+      # Uses the machine's Android SDK (downloading the command-line tools if it's ever missing)
+      # and adds the NDK version the app is built with.
+      - name: Set up Android SDK and NDK
+        run: |
+          if [ ! -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]; then
+            ANDROID_HOME="$HOME/android-sdk"
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            curl -fsSL -o "$RUNNER_TEMP/cmdline-tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+            unzip -q "$RUNNER_TEMP/cmdline-tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install platform-tools "ndk;${NDK_VERSION}"
+          {
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME"
+            echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION"
+          } >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -132,9 +151,7 @@ jobs:
           } > src-tauri/gen/android/keystore.properties
 
       - name: Build APK
-        run: |
-          export NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
-          npm run android:build
+        run: npm run android:build
 
       - uses: actions/upload-artifact@v4
         with:
