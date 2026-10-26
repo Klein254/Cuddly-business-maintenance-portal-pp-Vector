@@ -166,6 +166,11 @@ export function accountErrorMessage(err: unknown) {
   return 'Something went wrong. Please try again.';
 }
 
+// Readable copy for the CEO's view in Team Management (staffPasswords/, CEO-only in firestore.rules)
+function storedPassword(password: string) {
+  return { password, updatedAt: new Date().toISOString() };
+}
+
 export async function createStaffMember(profile: User, password: string) {
   if (password.length < MIN_PASSWORD_LENGTH) throw codedError('weak-password');
   const key = usernameKey(profile.username);
@@ -176,6 +181,7 @@ export async function createStaffMember(profile: User, password: string) {
   batch.set(doc(db, 'users', profile.id), { ...fields, authEmail: email });
   batch.set(doc(db, 'usernames', key), { userId: profile.id, email });
   batch.set(doc(db, 'balances', profile.id), { balanceDue: 0 });
+  batch.set(doc(db, 'staffPasswords', profile.id), storedPassword(password));
   await batch.commit();
 }
 
@@ -197,6 +203,7 @@ export async function updateStaffMember(user: User, changes: Partial<User>, newP
     if (newKey !== oldKey && user.authEmail) batch.delete(doc(db, 'usernames', oldKey));
     batch.set(doc(db, 'usernames', newKey), { userId: user.id, email });
   }
+  if (newPassword) batch.set(doc(db, 'staffPasswords', user.id), storedPassword(newPassword));
   await batch.commit();
 }
 
@@ -204,6 +211,7 @@ export async function deleteStaffMember(user: User) {
   const batch = writeBatch(db);
   batch.delete(doc(db, 'users', user.id));
   batch.delete(doc(db, 'balances', user.id));
+  batch.delete(doc(db, 'staffPasswords', user.id));
   if (user.authEmail) batch.delete(doc(db, 'usernames', usernameKey(user.username)));
   await batch.commit();
 }
@@ -280,6 +288,8 @@ export async function secureAllAccounts(): Promise<SecureAccountsReport> {
       userChanges.authEmail = email;
       batch.set(doc(db, 'usernames', key), { userId: user.id, email });
     }
+    // Keep the current password readable for the CEO before the plain-text copy is deleted
+    if (user.pin && (email || user.authEmail)) batch.set(doc(db, 'staffPasswords', user.id), storedPassword(user.pin));
     if (Object.keys(userChanges).length > 0) batch.update(doc(db, 'users', user.id), userChanges);
     await batch.commit();
 

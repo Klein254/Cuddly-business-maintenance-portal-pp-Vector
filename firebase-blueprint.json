@@ -132,6 +132,16 @@
         "email": { "type": "string" }
       },
       "required": ["userId", "email"]
+    },
+    "StaffPassword": {
+      "title": "StaffPassword",
+      "description": "Readable copy of a person's password for the CEO's view (Super Admin only)",
+      "type": "object",
+      "properties": {
+        "password": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["password"]
     }
   },
   "firestore": {
@@ -166,6 +176,10 @@
     "/usernames/{username}": {
       "schema": { "$ref": "#/entities/Username" },
       "description": "Sign-in lookup by lower-case surname"
+    },
+    "/staffPasswords/{userId}": {
+      "schema": { "$ref": "#/entities/StaffPassword" },
+      "description": "Readable passwords, only the Super Admin can read them"
     }
   }
 }

@@ -33,6 +33,7 @@ interface AdminPanelProps {
   onSaveUser: (user: User, changes: Partial<User>, newPassword?: string) => Promise<boolean>;
   onDeleteUser: (userId: string) => void;
   secured: boolean;
+  staffPasswords: Record<string, string>;
   rulesPublished: boolean | null;
   onSecureAccounts: () => Promise<SecureAccountsReport | null>;
   onSignOut: () => void;
@@ -61,6 +62,7 @@ export default function AdminPanel({
   onSaveUser,
   onDeleteUser,
   secured,
+  staffPasswords,
   rulesPublished,
   onSecureAccounts,
   onSignOut,
@@ -283,6 +285,7 @@ export default function AdminPanel({
             users={users}
             currentUserRole={currentUserRole}
             secured={secured}
+            staffPasswords={staffPasswords}
             rulesPublished={rulesPublished}
             onAddUser={onAddUser}
             onSaveUser={onSaveUser}

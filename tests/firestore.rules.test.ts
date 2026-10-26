@@ -51,6 +51,7 @@ beforeEach(async () => {
       await setDoc(doc(db, 'users', id), { id, ...s, email: '', phone: '', position: 'Staff', avatarColor: 'x', authEmail: authEmail(id) });
       await setDoc(doc(db, 'usernames', s.username.toLowerCase()), { userId: id, email: authEmail(id) });
       await setDoc(doc(db, 'balances', id), { balanceDue: 100 });
+      await setDoc(doc(db, 'staffPasswords', id), { password: `${id}-secret`, updatedAt: 't0' });
     }
     await setDoc(doc(db, 'jobs', 'j1'), job('j1', 'tech', 'in-progress'));
     await setDoc(doc(db, 'jobs', 'j2'), job('j2', 'tech2', 'pending'));
@@ -299,4 +300,29 @@ describe('CEO (super-admin)', () => {
     return allowed(batch.commit());
   });
   test('cannot read unknown collections', () => denied(getDoc(doc(as('ceo'), 'system', 'rules-check'))));
+});
+
+describe('stored passwords (CEO-only view)', () => {
+  const stored = (password: string) => ({ password, updatedAt: 't1' });
+  test('the CEO reads every password', () => allowed(getDocs(collection(as('ceo'), 'staffPasswords'))));
+  for (const who of ['proc', 'adm', 'fin', 'tech']) {
+    test(`${who} cannot list passwords`, () => denied(getDocs(collection(as(who), 'staffPasswords'))));
+  }
+  test('a technician cannot read even their own', () => denied(getDoc(doc(as('tech'), 'staffPasswords', 'tech'))));
+  test('signed out cannot read', () => denied(getDoc(doc(signedOut(), 'staffPasswords', 'tech'))));
+  test('head of procurement records a reset password', () => allowed(setDoc(doc(as('proc'), 'staffPasswords', 'tech'), stored('newpass1'))));
+  test("head of procurement cannot overwrite the CEO's", () => denied(setDoc(doc(as('proc'), 'staffPasswords', 'ceo'), stored('newpass1'))));
+  test('an admin cannot write passwords', () => denied(setDoc(doc(as('adm'), 'staffPasswords', 'tech'), stored('newpass1'))));
+  test('a technician cannot write their own', () => denied(setDoc(doc(as('tech'), 'staffPasswords', 'tech'), stored('newpass1'))));
+  test('no password for someone who is not on staff', () => denied(setDoc(doc(as('ceo'), 'staffPasswords', 'ghost'), stored('newpass1'))));
+  test('no extra fields', () => denied(setDoc(doc(as('ceo'), 'staffPasswords', 'tech'), { ...stored('newpass1'), note: 'x' })));
+  test('removing a person also removes their password', async () => {
+    const proc = as('proc');
+    const batch = writeBatch(proc);
+    batch.delete(doc(proc, 'users', 'tech2'));
+    batch.delete(doc(proc, 'balances', 'tech2'));
+    batch.delete(doc(proc, 'staffPasswords', 'tech2'));
+    batch.delete(doc(proc, 'usernames', 'techtwo'));
+    await allowed(batch.commit());
+  });
 });

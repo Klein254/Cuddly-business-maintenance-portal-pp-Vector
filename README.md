@@ -121,7 +121,7 @@ The Windows and macOS builds work unsigned, but show the warnings described abov
 
 The original app stored every password as plain text in the database, and its database rules let anyone on the internet read and change everything. This version:
 
-- **Signs people in with Firebase Authentication.** Google stores the passwords (hashed); the database no longer holds them, and admins can no longer see them, only set new ones. People still sign in with their **surname and the same password**.
+- **Signs people in with Firebase Authentication.** People still sign in with their **surname and the same password**. At the owner's request, the CEO (Super Admin) can still see everyone's password in Team Management: a copy is kept in a locked `staffPasswords` collection that only the Super Admin can read (other managers can set passwords but not read them). Anyone who gets into the CEO's account can see every password, so keep that password strong and private.
 - **Enforces every role on Firebase's servers** (`firestore.rules`), so it holds even against someone who bypasses the app:
   - Technicians see only their own jobs, shifts, clock logs, balance and alerts. They can only move their own jobs forward one step, and can't edit their pay, role or timesheet approvals.
   - Direct messages are private to the two people in them (admins included); everyone shares the General channel.
@@ -135,7 +135,7 @@ The original app stored every password as plain text in the database, and its da
 
 1. **Turn on Email/Password sign-in.** Firebase console → your project → **Authentication** → **Get started** (if shown) → **Sign-in method** → **Email/Password** → Enable → Save.
 2. **Install this version** on the CEO's computer or phone (or open the updated web version).
-3. **Secure the accounts.** The CEO signs in as usual → Admin Panel → **Team Management** → **Account Security** → **Secure all accounts**. Everyone gets a protected sign-in with their current password, and the stored passwords are deleted. The panel lists anyone who still needs a password (for example two people sharing a surname) and anyone whose password is weak.
+3. **Secure the accounts.** The CEO signs in as usual → Admin Panel → **Team Management** → **Account Security** → **Secure all accounts**. Everyone gets a protected sign-in with their current password, and the plain-text passwords are removed from the staff list (the CEO-only copy keeps them visible in Team Management). The panel lists anyone who still needs a password (for example two people sharing a surname) and anyone whose password is weak.
 4. **Publish the new rules straight away.** Either:
    - in the Firebase console: **Firestore Database** → choose the database **`ai-studio-2b14b9be-c901-4cd5-9b45-60bb8c6e2664`** → **Rules** → replace everything with the contents of `firestore.rules` → **Publish**; or
    - from this folder: `npx firebase-tools login`, then `npx firebase-tools deploy --only firestore:rules`.

@@ -117,6 +117,23 @@ service cloud.firestore {
           || isSuperAdmin());
     }
 
+    // ---------------------------------------------------------------- stored passwords
+    // A readable copy of each person's password, shown to the CEO in Team Management (owner's request).
+    // Only the CEO can read it. People managers write it in the same change that sets the password.
+
+    match /staffPasswords/{userId} {
+      allow read: if isSuperAdmin();
+      allow create, update: if isPeopleManager()
+        && request.resource.data.keys().hasOnly(['password', 'updatedAt'])
+        && request.resource.data.password is string
+        && request.resource.data.password.size() > 0
+        && existsAfter(/databases/$(database)/documents/users/$(userId))
+        && superAdminSafe('', getAfter(/databases/$(database)/documents/users/$(userId)).data.role);
+      allow delete: if isPeopleManager()
+        && (!exists(/databases/$(database)/documents/users/$(userId))
+          || superAdminSafe(profile(userId).data.role, ''));
+    }
+
     // ---------------------------------------------------------------- pay owed
     // Kept apart from the staff directory so colleagues can't read each other's balances.
 

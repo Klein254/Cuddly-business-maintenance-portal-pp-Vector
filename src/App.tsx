@@ -37,7 +37,7 @@ export default function App() {
   }), []);
 
   const {
-    users, shifts, clockLogs, jobs, notifications, messages, loading, usersConfirmed, accessError,
+    users, shifts, clockLogs, jobs, notifications, messages, staffPasswords, loading, usersConfirmed, accessError,
     updateUserFields, setBalance, addClockLog, updateClockLogFields, addJob, updateJobStatus,
     addShift, deleteShift, saveLegacyUser, deleteLegacyUser, addNotification, addMessage
   } = useFirebase(session);
@@ -653,6 +653,7 @@ export default function App() {
             onSaveUser={handleSaveUser}
             onDeleteUser={handleDeleteUser}
             secured={session?.mode === 'secured'}
+            staffPasswords={staffPasswords}
             rulesPublished={rulesPublished}
             onSecureAccounts={handleSecureAccounts}
             onSignOut={handleLogout}

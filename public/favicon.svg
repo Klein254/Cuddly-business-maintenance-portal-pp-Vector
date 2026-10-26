@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" fill="#000000"/>
-  <polygon points="50,15 90,85 10,85" fill="#f59e0b"/>
-  <polygon points="50,35 75,75 25,75" fill="#000000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Vector Technical emblem: the logo's gold open frame (gaps on both sides) around a bold V -->
+  <rect width="1024" height="1024" fill="#000000"/>
+  <path d="M184 420 V184 H840 V420 M840 604 V840 H184 V604" fill="none" stroke="#F9A61A" stroke-width="48" stroke-linecap="square"/>
+  <polygon points="318,318 452,318 512,548 572,318 706,318 580,686 444,686" fill="#FFFFFF"/>
+  <rect x="402" y="730" width="220" height="22" fill="#F7941D"/>
 </svg>

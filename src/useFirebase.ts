@@ -48,6 +48,7 @@ export function useFirebase(session: Session | null) {
   // True once the staff list has come from the server rather than this device's offline copy
   const [usersConfirmed, setUsersConfirmed] = useState(false);
   const [balances, setBalances] = useState<Record<string, StaffBalance>>({});
+  const [storedPasswords, setStoredPasswords] = useState<Record<string, string>>({});
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [clockLogs, setClockLogs] = useState<ClockLog[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -155,6 +156,24 @@ export function useFirebase(session: Session | null) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionKey, myRole]);
 
+  // Readable copies of passwords: the CEO only (the database rules refuse everyone else)
+  useEffect(() => {
+    setStoredPasswords({});
+    if (!session || session.mode !== 'secured' || myRole !== 'super-admin') return;
+    return onSnapshot(collection(db, 'staffPasswords'), snap => {
+      setStoredPasswords(Object.fromEntries(snap.docs.map(d => [d.id, String(d.data().password ?? '')])));
+    }, err => console.error("Firebase Snapshot Error (staffPasswords):", err));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionKey, myRole]);
+
+  // Before accounts are secured the PINs are still on the user documents
+  const staffPasswords = useMemo(() => {
+    if (myRole !== 'super-admin') return {};
+    if (session?.mode !== 'legacy') return storedPasswords;
+    return Object.fromEntries(rawUsers.filter(u => u.pin).map(u => [u.id, u.pin as string]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRole, sessionKey, storedPasswords, rawUsers]);
+
   // Before accounts are secured, balances live on the user documents; afterwards in balances/{id}
   const balanceOnUserDoc = (userId: string) => typeof rawUsers.find(u => u.id === userId)?.balanceDue === 'number';
 
@@ -201,7 +220,7 @@ export function useFirebase(session: Session | null) {
   const addMessage = async (m: ChatMessage) => setDoc(doc(db, 'messages', m.id), m);
 
   return {
-    users, shifts, clockLogs, jobs, notifications, messages, loading, usersConfirmed, accessError,
+    users, shifts, clockLogs, jobs, notifications, messages, staffPasswords, loading, usersConfirmed, accessError,
     updateUserFields, setBalance, addClockLog, updateClockLogFields, addJob, updateJobStatus,
     addShift, deleteShift, saveLegacyUser, deleteLegacyUser, addNotification, addMessage
   };

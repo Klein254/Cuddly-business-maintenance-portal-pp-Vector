@@ -9,6 +9,7 @@ interface TeamWidgetProps {
   users: User[];
   currentUserRole: string;
   secured: boolean; // signed in with a secured (Firebase Authentication) account
+  staffPasswords: Record<string, string>; // readable passwords, only filled in for the CEO
   rulesPublished: boolean | null; // whether the locked-down database rules are live
   onAddUser: (user: User, password: string) => Promise<boolean>;
   onSaveUser: (user: User, changes: Partial<User>, newPassword?: string) => Promise<boolean>;
@@ -29,7 +30,7 @@ function loadWeakPasswordAccounts(): SecureAccountsReport['weakPasswords'] {
   }
 }
 
-export default function TeamWidget({ users, currentUserRole, secured, rulesPublished, onAddUser, onSaveUser, onDeleteUser, onSecureAccounts, onSignOut }: TeamWidgetProps) {
+export default function TeamWidget({ users, currentUserRole, secured, staffPasswords, rulesPublished, onAddUser, onSaveUser, onDeleteUser, onSecureAccounts, onSignOut }: TeamWidgetProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<Partial<User>>({});
   const [editPassword, setEditPassword] = useState('');
@@ -333,7 +334,7 @@ export default function TeamWidget({ users, currentUserRole, secured, rulesPubli
                             {u.phone}
                             {(currentUserRole === 'super-admin' || currentUserRole === 'head-procurement') && (
                               <span className="block mt-1 text-red-400">
-                                u/n: {u.username} | {u.authEmail ? <span className="text-emerald-400">sign-in secured</span> : 'no secure sign-in yet'}
+                                u/n: {u.username}{currentUserRole === 'super-admin' && <> | p/w: {staffPasswords[u.id] ?? <span className="text-stone-500">not on file (set with Modify)</span>}</>} | {u.authEmail ? <span className="text-emerald-400">sign-in secured</span> : 'no secure sign-in yet'}
                               </span>
                             )}
                           </>

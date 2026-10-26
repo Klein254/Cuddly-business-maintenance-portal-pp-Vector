@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Same logo as public/favicon.svg, shrunk into Android's adaptive-icon safe zone so launchers don't clip the corners -->
-  <g transform="translate(50 50) scale(0.6) translate(-50 -50)">
-    <polygon points="50,15 90,85 10,85" fill="#f59e0b"/>
-    <polygon points="50,35 75,75 25,75" fill="#000000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Same emblem as public/favicon.svg, shrunk into Android's adaptive-icon safe zone so launchers don't clip it -->
+  <g transform="translate(512 512) scale(0.62) translate(-512 -512)">
+    <path d="M184 420 V184 H840 V420 M840 604 V840 H184 V604" fill="none" stroke="#F9A61A" stroke-width="48" stroke-linecap="square"/>
+    <polygon points="318,318 452,318 512,548 572,318 706,318 580,686 444,686" fill="#FFFFFF"/>
+    <rect x="402" y="730" width="220" height="22" fill="#F7941D"/>
   </g>
 </svg>
