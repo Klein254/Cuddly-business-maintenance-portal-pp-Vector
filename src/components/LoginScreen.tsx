@@ -43,13 +43,13 @@ export default function LoginScreen({ onLegacyLogin }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full bg-stone-900 border border-stone-800 rounded-xl p-8 shadow-2xl relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full bg-stone-900 border border-stone-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
         {/* Decorative header */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-amber-400" />
-        
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 rounded-b-full bg-amber-400" />
+
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-amber-400 flex items-center justify-center rounded-sm">
+          <div className="w-16 h-16 bg-amber-400 flex items-center justify-center rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.25)]">
             <span className="text-black font-black text-4xl">V</span>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function LoginScreen({ onLegacyLogin }: LoginScreenProps) {
                   setUsername(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-stone-950 border border-stone-800 rounded p-3 pl-10 text-stone-200 outline-none focus:border-amber-400 text-sm placeholder:text-stone-700"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3 pl-10 text-stone-200 outline-none focus:border-amber-400 text-sm placeholder:text-stone-700"
               />
             </div>
           </div>
@@ -106,7 +106,7 @@ export default function LoginScreen({ onLegacyLogin }: LoginScreenProps) {
                   setPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-stone-950 border border-stone-800 rounded p-3 pl-10 text-stone-200 outline-none focus:border-amber-400 text-sm placeholder:text-stone-700 font-mono tracking-widest placeholder:tracking-normal"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3 pl-10 text-stone-200 outline-none focus:border-amber-400 text-sm placeholder:text-stone-700 font-mono tracking-widest placeholder:tracking-normal"
               />
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function LoginScreen({ onLegacyLogin }: LoginScreenProps) {
           <button
             type="submit"
             disabled={signingIn}
-            className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black font-black text-sm uppercase py-3 rounded tracking-wider flex items-center justify-center gap-2 transition-colors mt-2"
+            className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black font-black text-sm uppercase py-3 rounded-xl tracking-wider flex items-center justify-center gap-2 transition-colors mt-2"
           >
             <ShieldCheck className="h-5 w-5" />
             {signingIn ? 'Verifying…' : 'Initialize Session'}

@@ -15,6 +15,8 @@ export default defineConfig(() => {
       // The installed apps ship their files locally, so the offline service worker is only for the web/PWA build.
       ...(isTauriBuild ? [] : [VitePWA({
         registerType: 'autoUpdate',
+        // Include the background photos so the glass interface looks the same offline
+        workbox: { globPatterns: ['**/*.{js,css,html,svg,png,jpg}'] },
         manifest: {
           name: 'Vector Technical Maintenance App',
           short_name: 'Vector',

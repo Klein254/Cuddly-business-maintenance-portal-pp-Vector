@@ -8,6 +8,7 @@ import { User, Shift, ClockLog, Job, PushNotificationLog, ChatMessage } from './
 import AdminPanel from './components/AdminPanel';
 import EmployeePortal from './components/EmployeePortal';
 import LoginScreen from './components/LoginScreen';
+import { GlassBackground, BackgroundPicker, useBackgroundChoice } from './components/GlassBackground';
 import { useFirebase, Session, ADMIN_ROLES, PEOPLE_MANAGER_ROLES, newId } from './useFirebase';
 import { useOnlineStatus } from './useOnlineStatus';
 import { initNotifications, showSystemNotification, confirmAction } from './platform';
@@ -45,6 +46,8 @@ export default function App() {
 
   const currentUser = session ? users.find(u => u.id === session.userId) ?? null : null;
   const [isAdminView, setIsAdminView] = useState<boolean>(true);
+  // Background photo: rotate through all, or keep one chosen photo (remembered on this device)
+  const [backgroundChoice, setBackgroundChoice] = useBackgroundChoice();
   // Whether the locked-down database rules are live (checked for people who manage accounts)
   const [rulesPublished, setRulesPublished] = useState<boolean | null>(null);
 
@@ -513,76 +516,96 @@ export default function App() {
 
   if (!authChecked || loading || (session && !currentUser)) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center">
-        <div className="w-10 h-10 bg-amber-400 flex items-center justify-center rounded-sm shrink-0 mb-4 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
+      <div className="glass-ui min-h-screen flex flex-col items-center justify-center">
+        <GlassBackground choice={backgroundChoice} />
+        <div className="w-10 h-10 bg-amber-400 flex items-center justify-center rounded-xl shrink-0 mb-4 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
            <span className="text-black font-black text-xl">V</span>
         </div>
-        <p className="text-stone-500 font-mono text-xs uppercase tracking-widest">Connecting Data Stream</p>
+        <p className="text-stone-400 font-mono text-xs uppercase tracking-widest">Connecting Data Stream</p>
       </div>
     );
   }
 
   if (!currentUser) {
-    return <LoginScreen onLegacyLogin={handleLegacyLogin} />;
+    return (
+      <div className="glass-ui">
+        <GlassBackground choice={backgroundChoice} />
+        <LoginScreen onLegacyLogin={handleLegacyLogin} />
+      </div>
+    );
   }
 
+  const isManager = ['super-admin', 'admin', 'head-procurement', 'finance'].includes(currentUser.role);
+
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none antialiased selection:bg-amber-400 selection:text-black">
-      
-      {/* Main Top Header containing the Custom geometric logo matching image */}
-      <header className="bg-[#0F0F0F] border-b border-stone-800 p-4 pt-[calc(1rem+env(safe-area-inset-top))] sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          
+    <div className="glass-ui min-h-screen text-stone-100 flex flex-col font-sans select-none antialiased selection:bg-amber-400 selection:text-black">
+      <GlassBackground choice={backgroundChoice} />
+
+      {/* Glass top bar: brand + background picker | view switch | signed-in user */}
+      <header className="px-4 pt-[calc(0.875rem+env(safe-area-inset-top))] pb-2 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-3">
+
           {/* Custom VECTOR TECHNICAL branded geometric frame */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-400 flex items-center justify-center rounded-sm shrink-0">
-              <span className="text-black font-black text-xl">V</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="glass-pill rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 bg-amber-400 flex items-center justify-center rounded-full shrink-0">
+                <span className="text-black font-black text-base">V</span>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xs sm:text-sm font-bold tracking-tight leading-none text-white truncate">VECTOR TECHNICAL</h1>
+                <p className="text-[9px] text-amber-400 uppercase tracking-widest font-medium mt-0.5 truncate">Maintenance &amp; Supplies</p>
+              </div>
+              <div className="hidden xl:block h-6 w-px bg-white/15 shrink-0 ml-1" />
+              <div className="hidden xl:block leading-tight">
+                <span className="font-mono text-[8px] text-stone-400 uppercase tracking-widest block">OPERATIONS HEAD</span>
+                <span className="font-mono text-[10px] text-amber-400 font-bold block">PORTAL V3.9</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-bold tracking-tighter leading-none text-white mt-1">VECTOR TECHNICAL</h1>
-              <p className="text-[10px] text-amber-400 uppercase tracking-widest font-medium mt-0.5">Maintenance &amp; Supplies</p>
-            </div>
-            
-            <div className="hidden sm:block h-8 w-px bg-stone-800 shrink-0 ml-2" />
-            <div className="hidden sm:block ml-2">
-              <span className="font-mono text-[9px] text-stone-500 uppercase tracking-widest block">OPERATIONS HEAD</span>
-              <span className="font-mono text-xs text-amber-400 font-bold block">PORTAL V3.9</span>
-            </div>
+            <BackgroundPicker choice={backgroundChoice} onChoose={setBackgroundChoice} />
           </div>
 
-          {/* Interactive Role Selector Dropdown -> Now user display */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            {['super-admin', 'admin', 'head-procurement', 'finance'].includes(currentUser.role) && (
-              <div className="bg-stone-900 border border-stone-800 rounded p-1 flex items-center mr-2">
+          {/* Admin Panel / Terminal switch as the centre navigation pill */}
+          <div className="flex justify-start lg:justify-center">
+            {isManager && (
+              <div className="glass-pill rounded-full p-1 flex items-center">
                 <button
                   onClick={() => setIsAdminView(true)}
-                  className={`px-3 py-1 text-xs font-bold rounded uppercase transition-colors ${isAdminView ? 'bg-amber-400 text-black' : 'text-stone-400 hover:text-white'}`}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-full transition-colors cursor-pointer ${isAdminView ? 'bg-white text-black shadow' : 'text-stone-300 hover:text-white'}`}
                 >
+                  <ShieldAlert className="h-3.5 w-3.5" />
                   Admin Panel
                 </button>
                 <button
                   onClick={() => setIsAdminView(false)}
-                  className={`px-3 py-1 text-xs font-bold rounded uppercase transition-colors ${!isAdminView ? 'bg-indigo-500 text-white' : 'text-stone-400 hover:text-white'}`}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-full transition-colors cursor-pointer ${!isAdminView ? 'bg-white text-black shadow' : 'text-stone-300 hover:text-white'}`}
                 >
+                  <Settings className="h-3.5 w-3.5" />
                   Terminal
                 </button>
               </div>
             )}
-            <div className="bg-stone-900 border border-stone-800 rounded px-3 py-1.5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-emerald-400" />
-                <div className="text-left">
-                  <span className="block text-xs font-bold text-white">{currentUser.name}</span>
-                  <span className="block text-[10px] font-mono text-stone-500 uppercase">
-                    {currentUser.role === 'super-admin' ? 'CEO / Super-Admin' : 
-                     currentUser.role === 'admin' ? 'Admin / Manager' : 
-                     currentUser.role === 'finance' ? 'Finance' : 
-                     currentUser.role === 'head-procurement' ? 'Head Proc.' : 
-                     'Field Technician'}
-                  </span>
-                </div>
+          </div>
+
+          {/* Signed-in user */}
+          <div className="flex items-center justify-start lg:justify-end gap-2">
+            <div className="glass-pill rounded-full pl-1.5 pr-1.5 py-1.5 flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold uppercase shrink-0 ${currentUser.avatarColor || 'bg-amber-400 text-black'}`}>
+                {currentUser.name.split(' ').map(x => x[0]).join('').slice(0, 2)}
               </div>
-              <button onClick={handleLogout} className="text-stone-400 hover:text-white px-2 cursor-pointer transition-colors" title="Disconnect Session">
+              <div className="text-left leading-tight">
+                <span className="flex items-center gap-1 text-xs font-bold text-white">
+                  {currentUser.name}
+                  <UserCheck className="h-3 w-3 text-emerald-400" />
+                </span>
+                <span className="block text-[9px] font-mono text-stone-400 uppercase">
+                  {currentUser.role === 'super-admin' ? 'CEO / Super-Admin' :
+                   currentUser.role === 'admin' ? 'Admin / Manager' :
+                   currentUser.role === 'finance' ? 'Finance' :
+                   currentUser.role === 'head-procurement' ? 'Head Proc.' :
+                   'Field Technician'}
+                </span>
+              </div>
+              <button onClick={handleLogout} className="w-8 h-8 rounded-full flex items-center justify-center text-stone-300 hover:text-white hover:bg-white/10 cursor-pointer transition-colors" title="Disconnect Session">
                 <LogOut className="h-4 w-4" />
               </button>
             </div>
@@ -592,7 +615,7 @@ export default function App() {
 
         {/* Offline notice: work continues on the local copy and syncs automatically on reconnect */}
         {!isNetworkOnline && (
-          <div className="max-w-7xl mx-auto mt-3 flex items-center justify-center gap-2 bg-amber-400/10 border border-amber-400/30 rounded px-3 py-1.5 text-center">
+          <div className="glass-pill max-w-7xl mx-auto mt-3 flex items-center justify-center gap-2 !border-amber-400/40 rounded-full px-4 py-1.5 text-center">
             <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
             <span className="font-mono text-[9px] sm:text-[10px] text-amber-400 uppercase tracking-widest">
               Offline Mode &bull; Changes are saved on this device and will sync automatically when the connection returns
@@ -601,12 +624,12 @@ export default function App() {
         )}
       </header>
 
-      {/* Main Container */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        
+      {/* Main Container (extra left room on large screens for the floating tab rail) */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:pl-24 pb-28 lg:pb-6 space-y-6">
+
         {/* Urgent alert banners (simulating live notifications from push notifications) */}
         {activeToast && (
-          <div className="fixed top-[calc(4.5rem+env(safe-area-inset-top))] right-4 z-50 animate-enter max-w-sm w-[calc(100vw-2rem)] shadow-2xl overflow-hidden rounded-lg border border-amber-400 bg-stone-900/95 backdrop-blur-md p-4">
+          <div className="glass-panel fixed top-[calc(4.5rem+env(safe-area-inset-top))] right-4 z-50 animate-enter max-w-sm w-[calc(100vw-2rem)] overflow-hidden rounded-2xl !border-amber-400/60 p-4">
             <div className="flex items-start gap-3">
               <div className={`p-1.5 rounded-full ${
                 activeToast.type === 'alert' ? 'bg-red-500 text-white' : 
@@ -685,8 +708,8 @@ export default function App() {
       </main>
 
       {/* Corporate Compliance bottom footer */}
-      <footer className="border-t border-stone-800 bg-[#000] py-6 px-4 select-none mt-12 text-stone-500 text-center text-xs">
-        <div className="max-w-7xl mx-auto space-y-2">
+      <footer className="py-6 px-4 select-none mt-12 mb-24 lg:mb-0 text-stone-500 text-center text-xs">
+        <div className="glass-pill max-w-4xl mx-auto rounded-3xl px-6 py-4 space-y-2">
           <p className="font-mono text-[10px] tracking-wider uppercase text-stone-500">
             Vector Technical Maintenance &amp; General Supplies Ltd. &bull; Enterprise Operations Hub
           </p>

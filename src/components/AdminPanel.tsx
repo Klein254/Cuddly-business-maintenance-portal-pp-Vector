@@ -10,6 +10,7 @@ import NotificationsWidget from './NotificationsWidget';
 import ReportsWidget from './ReportsWidget';
 import TeamWidget from './TeamWidget';
 import ChatWidget from './ChatWidget';
+import GlassRail, { RailItem, greeting } from './GlassRail';
 import { showAlert } from '../platform';
 import { SecureAccountsReport } from '../auth';
 
@@ -146,12 +147,29 @@ export default function AdminPanel({
     return new Date(m.timestamp).getTime() > lastReadMsg;
   }).length;
 
+  const canManageTeam = currentUserRole === 'super-admin' || currentUserRole === 'admin' || currentUserRole === 'head-procurement';
+  const canSeePayroll = currentUserRole === 'super-admin' || currentUserRole === 'finance';
+  const railItems: RailItem<typeof activeTab>[] = [
+    { id: 'reports', label: 'Executive Reports', icon: TrendingUp },
+    ...(canManageTeam ? [{ id: 'team' as const, label: 'Team Management', icon: Briefcase }] : []),
+    { id: 'roster', label: 'Roster Scheduler', icon: Calendar },
+    { id: 'tickets', label: 'Ticket Completion', icon: CheckCircle2 },
+    ...(canSeePayroll ? [{ id: 'payroll' as const, label: 'Contractor Payments', icon: DollarSign }] : []),
+    { id: 'telemetry', label: 'Check-In Log Audits', icon: ClipboardList },
+    { id: 'alerts', label: 'Alerts & Notifications', icon: Bell, badge: unreadAdminCount },
+    { id: 'vehicles', label: 'Fleet Vehicles', icon: Truck },
+    { id: 'chat', label: 'Comms Hub', icon: MessageSquare, badge: unreadMessagesCount },
+  ];
+
   return (
     <div className="space-y-6">
+      <GlassRail items={railItems} active={activeTab} onSelect={handleTabSwitch} />
+
       {/* Top action dashboard & tabs switcher */}
       <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 sm:p-5 shadow-lg">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
+            <p className="font-sans text-sm text-stone-300 mb-1">{greeting(currentUser.name)}</p>
             <span className="font-mono text-[9px] uppercase tracking-widest text-amber-400 block">
               SECURE SECTOR DISPATCH HUBS
             </span>
@@ -175,7 +193,7 @@ export default function AdminPanel({
         </div>
 
         {/* Tab List */}
-        <div className="flex flex-wrap border-t border-stone-800/80 mt-5 pt-4 gap-1.5 text-xs font-semibold">
+        <div className="flex lg:hidden flex-wrap border-t border-stone-800/80 mt-5 pt-4 gap-1.5 text-xs font-semibold">
           <button
             onClick={() => handleTabSwitch('reports')}
             className={`px-4 py-2 rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
@@ -694,8 +712,8 @@ export default function AdminPanel({
       )}
 
       {/* Floating Bottom Navigation Pill (Netflix Style) */}
-      <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
-        <div className="bg-[#1a1a1a]/40 backdrop-blur-2xl border border-white/10 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
+      <div className="lg:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
+        <div className="glass-pill rounded-full p-1 overflow-hidden">
           <div className="flex items-center overflow-x-auto scrollbar-hide snap-x w-full">
             <button
               onClick={() => handleTabSwitch('reports')}

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { User, Shift, ClockLog, Job, PushNotificationLog, ChatMessage } from '../types';
 import ChatWidget from './ChatWidget';
+import GlassRail, { RailItem, greeting } from './GlassRail';
 import { saveJsonFile } from '../platform';
 
 interface EmployeePortalProps {
@@ -195,9 +196,24 @@ export default function EmployeePortal({
   const myAssignedJobs = jobs.filter(j => j.assignedUserId === employee.id);
   const myTodayShifts = shifts.filter(s => s.userId === employee.id);
 
+  const railItems: RailItem<typeof myPortalTab>[] = [
+    { id: 'dashboard', label: 'Work Console', icon: Home },
+    { id: 'tickets', label: 'My Tickets', icon: FileText },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
+    { id: 'chat', label: 'Comms Hub', icon: MessageSquare, badge: unreadMessagesCount },
+    { id: 'performance', label: 'Performance', icon: Activity },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex border-b border-stone-800 pb-px mb-4 gap-2 px-1 overflow-x-auto scrollbar-hide whitespace-nowrap">
+      <GlassRail items={railItems} active={myPortalTab} onSelect={handleTabSwitch} />
+
+      <div className="px-1">
+        <h2 className="font-sans font-bold text-2xl text-white tracking-tight">{greeting(employee.name)}</h2>
+        <p className="font-sans text-xs text-stone-400 mt-1">Here's your workday at a glance.</p>
+      </div>
+
+      <div className="lg:hidden flex border-b border-stone-800 pb-px mb-4 gap-2 px-1 overflow-x-auto scrollbar-hide whitespace-nowrap">
         <button
           onClick={() => handleTabSwitch('dashboard')}
           className={`px-4 py-2 text-xs font-mono uppercase tracking-widest font-bold border-b-2 transition-colors shrink-0 ${
@@ -888,8 +904,8 @@ export default function EmployeePortal({
       )}
 
       {/* Floating Bottom Navigation Pill (Netflix Style) */}
-      <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
-        <div className="bg-[#1a1a1a]/40 backdrop-blur-2xl border border-white/10 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
+      <div className="lg:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
+        <div className="glass-pill rounded-full p-1 overflow-hidden">
           <div className="flex items-center overflow-x-auto scrollbar-hide snap-x w-full">
             <button
               onClick={() => handleTabSwitch('dashboard')}

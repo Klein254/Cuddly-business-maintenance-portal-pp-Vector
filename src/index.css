@@ -15,11 +15,100 @@
   --color-amber-300: #FFE55C;
   --color-amber-400: #FFD700;
   --color-amber-500: #E6C200;
+
+  --animate-enter: enter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade: enter 0.4s ease-out;
+  --animate-scale: scale-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-swing: swing 0.8s ease-in-out;
+
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes swing {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(14deg); }
+    75% { transform: rotate(-10deg); }
+  }
 }
 
 body {
   background-color: var(--color-stone-950);
   color: #ffffff;
+}
+
+/* ---- Glass interface ----
+   Inside .glass-ui the dark surface shades become translucent, so every card, input and
+   border in the app turns into frosted glass over the photo background (GlassBackground). */
+.glass-ui {
+  --color-stone-950: rgb(8 8 10 / 0.42);
+  --color-stone-900: rgb(26 26 30 / 0.5);
+  --color-stone-850: rgb(255 255 255 / 0.07);
+  --color-stone-800: rgb(255 255 255 / 0.11);
+  --color-stone-750: rgb(255 255 255 / 0.15);
+  --color-stone-700: #5c5c5c;
+  --color-stone-600: #6e6e6e;
+  --color-stone-500: #939393;
+  --color-stone-400: #b4b4b4;
+  --color-stone-300: #d0d0d0;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  background: transparent;
+}
+
+/* Top-level cards get the blur; nested ones stay plain translucent (cheaper and avoids muddy layering).
+   A blurred card would trap a `fixed` modal opened inside it (e.g. the roster's assign-shift form),
+   so a card skips the blur while it contains one. */
+.glass-ui .bg-stone-900:not(.bg-stone-900 .bg-stone-900):not(:has(.fixed)) {
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 10px 40px rgb(0 0 0 / 0.25);
+}
+
+.glass-panel {
+  background-color: rgb(26 26 30 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 10px 40px rgb(0 0 0 / 0.25);
+}
+
+.glass-pill {
+  background-color: rgb(30 30 34 / 0.45);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 8px 30px rgb(0 0 0 / 0.3);
+}
+
+/* Dark text on amber buttons must stay solid, not translucent */
+.glass-ui .text-stone-950 {
+  color: #0A0A0A;
+}
+
+/* Native dropdown lists can't be translucent */
+.glass-ui option {
+  background-color: #1c1c20;
+  color: #ffffff;
+}
+
+/* Slow drift on the current background photo */
+.glass-bg-zoom {
+  animation: bg-drift 24s ease-in-out infinite alternate;
+}
+@keyframes bg-drift {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-bg-zoom { animation: none; }
+  .glass-bg img { transition: none; }
 }
 
 html[data-theme="high-contrast"] {
@@ -28,6 +117,10 @@ html[data-theme="high-contrast"] {
 }
 html[data-theme="high-contrast"] img {
   filter: invert(1) hue-rotate(180deg);
+}
+/* Daylight mode is about readability, so drop the photo behind the panels */
+html[data-theme="high-contrast"] .glass-bg img {
+  display: none;
 }
 
 .scrollbar-hide::-webkit-scrollbar {
